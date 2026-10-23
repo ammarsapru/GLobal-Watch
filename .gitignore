@@ -1,0 +1,11 @@
+# secrets
+.env
+# local runtime data (caches, history, samples)
+data/cache.json
+data/db/
+data/samples/
+data/satcat.json
+data/settings.json
+data/advisory-levels.json
+node_modules/
+*.log

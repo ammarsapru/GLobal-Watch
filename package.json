@@ -1,0 +1,1 @@
+{ "name": "global-watch", "version": "1.0.0", "private": true, "description": "Country intelligence board with live news, markets, travel and aircraft tracking", "scripts": { "start": "node server.js", "mock": "set MOCK=1&& node server.js" }, "engines": { "node": ">=18" } }
