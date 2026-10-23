@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Oxanium:wght@500;700&family=IBM+Plex+Sans+Condensed:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style2.css">
 </head>
 <body>
 <div class="app">
@@ -15,33 +16,79 @@
     <div class="country" id="country"></div>
     <div class="status" id="status"></div>
     <div class="clock" id="clock">--:--:-- UTC</div>
+    <div class="topbtns">
+      <button class="tb mic" id="micBtn" type="button" title="Ask out loud (P)" aria-label="Ask out loud"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg><kbd>P</kbd></button>
+      <button class="tb" id="alertBtn" type="button" title="Alerts" aria-label="Alerts"><svg viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 1 1 12 0v5l2 2H4z"/><path d="M10 20a2 2 0 0 0 4 0"/></svg><b class="badge" id="alertCount" hidden>0</b></button>
+      <button class="tb" id="paletteBtn" type="button" title="Command palette (Ctrl+K)" aria-label="Command palette"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M20 20l-4.5-4.5"/></svg><kbd>Ctrl K</kbd></button>
+      <label class="sr" for="layoutSel">Layout</label><select id="layoutSel" class="inp layoutsel" title="Panel layout"></select>
+      <button class="tb" id="settingsBtn" type="button" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></button>
+    </div>
     <div class="search">
       <label for="q" class="sr">Find a country</label>
       <input id="q" type="search" placeholder="Find a country…" autocomplete="off">
       <div class="results" id="results" hidden></div>
     </div>
   </header>
+  <div class="strip" id="strip"></div>
   <main class="main" id="main">
-    <div class="col" id="left"></div>
+    <div class="col" id="left" data-col="left"></div>
     <div class="col center" id="center">
-      <div id="newsSlot" class="slot"></div>
+      <div id="newsSlot" class="slot" data-col="center"></div>
       <div class="stage" id="stage">
+        <canvas id="sky" aria-hidden="true"></canvas>
         <div class="orb" id="orb"><canvas id="globe" tabindex="0" aria-label="Globe. Hover or focus to raise it, drag or arrow keys to rotate, scroll to zoom, click a country to open its briefing."></canvas></div>
-        <div class="hud">LAT <b id="lat">0.0</b> · LON <b id="lon">0.0</b> · ZOOM <b id="zoomv">1.0×</b></div>
-        <div class="legend" id="legend" hidden><span><i class="dot mil"></i>Military</span><span><i class="dot civ"></i>Civil</span><span id="legendCount"></span></div>
-        <div class="stage-btns"><button class="spin" id="spin" aria-pressed="true" type="button">AUTO-ROTATE</button><button class="spin" id="zoomReset" type="button">RESET VIEW</button></div>
+        <div class="hud"><span>LAT <b id="lat">0.0</b> · LON <b id="lon">0.0</b> · ZOOM <b id="zoomv">1.0×</b></span><span id="sunInfo"></span></div>
+        <div class="legend" id="legend" hidden></div>
+        <div class="choro-legend" id="choroLegend" hidden></div>
+        <div class="stage-btns">
+          <button class="spin" id="worldBtn" type="button" title="World view (W)">WORLD</button>
+          <button class="spin" id="layersBtn" type="button" aria-expanded="false" title="Globe layers (L)">LAYERS</button>
+          <button class="spin" id="spin" aria-pressed="true" type="button">AUTO-ROTATE</button>
+          <button class="spin" id="zoomReset" type="button">RESET VIEW</button>
+        </div>
+        <div class="layers" id="layersMenu" hidden></div>
         <div class="hint" id="hint">HOVER TO RAISE THE GLOBE</div>
         <nav class="pdock" id="pdock" aria-label="Closed panels" hidden></nav>
         <div class="tip" id="tip" hidden></div>
+        <div class="gcard" id="gcard" hidden></div>
       </div>
     </div>
-    <div class="col" id="right"></div>
+    <div class="col" id="right" data-col="right"></div>
   </main>
 </div>
+
+<!-- voice / ask overlay -->
+<div class="voice" id="voice" hidden aria-live="polite">
+  <div class="voice-inner">
+    <canvas id="orbCanvas" width="320" height="320" aria-hidden="true"></canvas>
+    <div class="vstate" id="vState">Listening…</div>
+    <div class="vq" id="vQ"></div>
+    <form class="vform" id="vForm"><label class="sr" for="vInput">Ask a question</label><input id="vInput" class="inp" placeholder="Or type a question and press Enter" autocomplete="off"><button class="btn solid" type="submit">Ask</button></form>
+    <div class="vanswer" id="vAnswer" hidden></div>
+    <div class="vbtns"><button class="btn ghost" id="vStop" type="button">Stop speaking</button><button class="btn ghost" id="vClose" type="button">Close (Esc)</button></div>
+    <p class="note vhelp">Press <kbd>P</kbd> to start and again to send · <kbd>Esc</kbd> to cancel</p>
+  </div>
+</div>
+<!-- command palette -->
+<div class="palette" id="palette" hidden><div class="pal-inner"><input id="palInput" class="inp" placeholder="Type a country, panel, layer or action…" autocomplete="off" aria-label="Command"><div class="pal-list" id="palList" role="listbox"></div><p class="note">↑↓ to move · Enter to run · Esc to close · <kbd>?</kbd> for shortcuts</p></div></div>
+<!-- modal (settings, help, brief) -->
+<div class="modal" id="modal" hidden><div class="modal-inner"><header><h2 id="modalTitle"></h2><button class="ic" id="modalClose" aria-label="Close"><svg viewBox="0 0 16 16"><path d="M4 4l8 8M12 4l-8 8"/></svg></button></header><div class="modal-body" id="modalBody"></div></div></div>
+<div class="alerts-pop" id="alertsPop" hidden></div>
 <div class="toast" id="toast" role="status" hidden></div>
-<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"></script>
+
+<script src="vendor/d3.min.js"></script>
+<script src="vendor/topojson-client.min.js"></script>
+<script src="vendor/satellite.min.js"></script>
 <script src="payload.js"></script>
-<script src="app.js"></script>
+<script src="js/core.js"></script>
+<script src="js/globe.js"></script>
+<script src="js/p-finance.js"></script>
+<script src="js/p-news.js"></script>
+<script src="js/p-travel.js"></script>
+<script src="js/p-track.js"></script>
+<script src="js/p-world.js"></script>
+<script src="js/voice.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
 </body>
 </html>

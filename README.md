@@ -4,7 +4,7 @@
 
 It runs on your own computer as a small Node.js server plus a browser front end. API keys stay in a local `.env` file and never reach the browser.
 
-> **Status:** active development. The server-side data layer, the collector and the ask-anything engine are done. The rebuilt front end (voice assistant, new panels, sun and moon on the globe, command palette) is being wired in now. See [Roadmap](#roadmap).
+> **Status:** active development. Everything in the table below is built and runs locally. Live-data parsers for the newer sources are being checked against real responses. See [Roadmap](#roadmap).
 
 ---
 
@@ -120,11 +120,29 @@ This board is about countries, fleets and public events. Aircraft and ships are 
 - [x] GDELT, hazards, stability, government, economy, trade, FX, weather, visa, satellites (server)
 - [x] Collector: history, baselines, anomaly and keyword alerts, morning brief
 - [x] Ask-anything engine with routing and citations
-- [ ] Voice assistant (press P, Siri-style orb in the site colours, spoken answers)
-- [ ] Globe: sun and moon, day/night, time zones, satellites, choropleth, arcs, sharper borders on zoom, world mode
-- [ ] New panels in the UI; deeper news/finance/tracking/travel views
-- [ ] Command palette (Ctrl+K), shortcuts, draggable layouts, situation strip, motion polish
-- [ ] Entity graph across panels; push notifications
+- [x] Voice assistant (press P, Siri-style orb in the site colours, spoken answers)
+- [x] Globe: sun and moon, day/night, time zones, satellites, choropleth, arcs, sharper borders on zoom, world mode
+- [x] New panels in the UI; deeper news/finance/tracking/travel views
+- [x] Command palette (Ctrl+K), shortcuts, draggable layouts, situation strip, motion polish
+- [x] Desktop notifications for alerts
+- [ ] Verify every live source against real responses (`/api/diag`)
+- [ ] Entity graph across panels
+
+## Keyboard
+
+| Key | Does |
+|---|---|
+| `P` | Ask out loud: tap to start and tap to send, or hold and release |
+| `Ctrl K` or `/` | Command palette: countries, panels, layouts, layers, map colours, actions |
+| `W` | World view |
+| `G` | Raise the globe |
+| `L` | Globe layers |
+| `1`–`9` | Open or focus a panel |
+| `B` / `A` | Morning brief / alerts |
+| `?` | Shortcut help |
+| `Esc` | Close whatever is open |
+
+Drag a panel by its header to another column; the arrangement is saved as "My layout". Close a panel with `–` and it waits in the dock under the globe.
 
 ## Credits
 

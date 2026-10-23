@@ -72,6 +72,7 @@ const routes = {
   async '/api/advisory'(q) { return stab.advisory(isoOf(q)); },
   async '/api/advisories'() { const r = await stab.usAdvisories(); return { levels: Object.fromEntries(Object.entries(r.byIso).map(([k, v]) => [k, v.level])) }; },
   async '/api/gov'(q) { return gov.government(isoOf(q)); },
+  async '/api/ref'(q) { const c = country(isoOf(q)); if (!c) throw Object.assign(new Error('Unknown country'), { status: 404 }); return c; },
   // ---- intelligence layer
   async '/api/alerts'(q) { return { list: store.query('alerts', a => !q.iso || a.iso === q.iso || !a.iso, Date.now() - (+q.hours || 48) * 3600e3).slice(-200).reverse() }; },
   async '/api/situation'() { return { list: collector.situation() }; },
