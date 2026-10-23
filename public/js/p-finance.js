@@ -99,7 +99,7 @@ function renderEcoExtra(r) {
 // ---------- Outlook (IMF) ----------
 function renderOutlook(r) {
   const v = $('#outView'); if (!r) return;
-  if (!r.imf?.series || !Object.keys(r.imf.series).length) { v.innerHTML = errBox(r.imf?.error || 'IMF forecasts unavailable for this country.'); return; }
+  if (!r.imf?.series || !Object.values(r.imf.series).some(a => a?.length)) { v.innerHTML = errBox(r.imf?.error || 'IMF forecasts unavailable for this country.'); return; }
   const y = r.imf.thisYear;
   v.innerHTML = `<p class="note">IMF World Economic Outlook. Shaded years are forecasts.</p><div class="minis" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">${Object.entries(r.imf.labels).map(([id, label]) => { const s = r.imf.series[id] || []; const now = s.find(p => p[0] === y), nxt = s.find(p => p[0] === y + 1); return `<div class="mini"><small>${esc(label)}</small><strong>${now ? fmtN(now[1], 1) : '—'} <span class="dim" style="font-size:11px">${y}</span></strong><em class="note">${nxt ? 'Forecast ' + (y + 1) + ': ' + fmtN(nxt[1], 1) : ''}</em><div id="imf-${id}"></div></div>`; }).join('')}</div>
     <span class="eyebrow">Country risk score</span><div id="riskBox">${skeleton(3)}</div>`;

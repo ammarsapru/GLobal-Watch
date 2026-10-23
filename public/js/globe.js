@@ -65,7 +65,7 @@ const visible = ll => d3.geoDistance(ll, [-G.rot[0], -G.rot[1]]) < Math.PI / 2;
 const CHORO = {
   off: null,
   advisory: { name: 'US travel advisory', color: v => ['', '#4f9e72', '#c9a43a', '#d6803c', '#d0563e'][v] || null, legend: [['Normal', '#4f9e72'], ['Caution', '#c9a43a'], ['Reconsider', '#d6803c'], ['Do not travel', '#d0563e']] },
-  outage: { name: 'Internet disruption (24 h)', color: v => v > 0 ? d3.interpolateRgb('#2a3f4d', '#e0735a')(Math.min(1, Math.log10(1 + v) / 5)) : null, legend: [['Minor', '#4b5258'], ['Severe', '#e0735a']] },
+  outage: { name: 'Internet disruption (24 h)', color: v => v > 0 ? d3.interpolateRgb('#2a3f4d', '#e0735a')(Math.min(1, Math.log10(1 + v) / 6)) : null, legend: [['Minor', '#4b5258'], ['Severe', '#e0735a']] },
   gdp: { name: 'GDP per person', color: v => v ? d3.interpolateRgb('#1d3140', '#6ea8d6')(Math.min(1, Math.max(0, (Math.log10(v) - 2.6) / 2.4))) : null, legend: [['$500', '#1d3140'], ['$100k', '#6ea8d6']] },
   inflation: { name: 'Inflation', color: v => v == null ? null : v < 0 ? '#5a8bb0' : d3.interpolateRgb('#2b4d3a', '#e0735a')(Math.min(1, v / 25)), legend: [['Deflation', '#5a8bb0'], ['0%', '#2b4d3a'], ['25%+', '#e0735a']] },
   alerts: { name: 'Alerts in the last 48 h', color: v => v ? ['', '#6ea8d6', '#e6a23c', '#e0735a'][v] : null, legend: [['Info', '#6ea8d6'], ['Warning', '#e6a23c'], ['Critical', '#e0735a']] }

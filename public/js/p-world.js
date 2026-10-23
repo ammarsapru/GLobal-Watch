@@ -57,7 +57,7 @@ async function loadNet(force) {
     if (!iso) {
       const r = await api('/api/outages' + (force ? '?force=1' : ''));
       const rows = r.rows.filter(x => x.score > 0).sort((a, b) => b.score - a.score);
-      box.innerHTML = `<span class="eyebrow">Countries with internet disruption · last 24 h</span><div class="bars">${rows.slice(0, 15).map(x => `<div class="click" data-cc="${esc(x.cc)}"><span>${esc(x.name)}</span><b style="width:${Math.min(100, Math.log10(1 + x.score) / 5 * 100)}%;background:var(--warn)"></b><span class="dim">${fmtN(x.score, 0)}</span></div>`).join('')}</div><p class="note">IODA (Georgia Tech) outage scores combine BGP routing, active probing and telescope traffic.</p>`;
+      box.innerHTML = `<span class="eyebrow">Countries with internet disruption · last 24 h</span><div class="bars">${rows.slice(0, 15).map(x => `<div class="click" data-cc="${esc(x.cc)}"><span>${esc(x.name)}</span><b style="width:${Math.min(100, Math.log10(1 + x.score) / 6 * 100)}%;background:var(--warn)"></b><span class="dim">${fmtN(x.score, 0)}</span></div>`).join('')}</div><p class="note">IODA (Georgia Tech) outage scores combine BGP routing, active probing and telescope traffic.</p>`;
       $$('#evNet [data-cc]').forEach(el => el.onclick = () => { const i = byA2[el.dataset.cc]; if (i) emit('country', i); });
       return;
     }
@@ -138,7 +138,7 @@ async function computeRisk() {
     ['Currency (1 y vs USD)', 15, fxc != null ? clamp(-fxc / 40) : null, fxc != null ? (fxc > 0 ? '+' : '') + fmtN(fxc, 1) + '%' : '—'],
     ['Government debt', 10, debt != null ? clamp((debt - 60) / 120) : null, debt != null ? fmtN(debt, 0) + '% of GDP' : '—'],
     ['Growth', 10, gr != null ? clamp((1 - gr) / 6) : null, gr != null ? fmtN(gr, 1) + '%' : '—'],
-    ['Internet disruption', 10, clamp(Math.log10(1 + out) / 5), out ? 'IODA ' + fmtN(out, 0) : 'none'],
+    ['Internet disruption', 10, clamp((Math.log10(1 + out) - 3) / 3), out ? 'IODA ' + fmtN(out, 0) : 'none'],
     ['Unrest trend', 5, un != null ? clamp((un - 1) / 1.5) : null, un != null ? (un > 1 ? '+' : '') + Math.round((un - 1) * 100) + '% coverage' : 'open Events › Unrest'],
     ['Natural hazards', 5, clamp(hz / 2), hz + ' major nearby']];
   const have = parts.filter(p => p[2] != null); const w = have.reduce((a, p) => a + p[1], 0);
@@ -171,12 +171,13 @@ function renderTrade() {
   const r = T.data, box = $('#tdBox'); if (!r || T.for !== S.iso) return;
   const tab = trd.tab, flow = tab === 'imp' ? r.imports : r.exports;
   const bal = (r.exports?.total || 0) - (r.imports?.total || 0);
-  const head = `<div class="tiles"><div><small>Exports ${r.year}</small><strong>${fmtUSD(r.exports?.total)}</strong></div><div><small>Imports ${r.year}</small><strong>${fmtUSD(r.imports?.total)}</strong></div><div><small>Balance</small><strong class="${bal >= 0 ? 'up' : 'down'}">${bal >= 0 ? '+' : '−'}${fmtUSD(Math.abs(bal))}</strong></div></div>`;
+  const head = `<div class="tiles"><div><small>Exports ${r.year}</small><strong>${fmtUSD(r.exports?.total)}</strong></div><div><small>Imports ${r.year}</small><strong>${fmtUSD(r.imports?.total)}</strong></div><div><small>Balance</small><strong class="${bal >= 0 ? 'up' : 'down'}">${r.imports?.total == null ? '—' : (bal >= 0 ? '+' : '−') + fmtUSD(Math.abs(bal))}</strong></div></div>`;
   if (tab === 'prod') {
     const p = r.products || []; const mx = p[0]?.value || 1;
     box.innerHTML = head + `<span class="eyebrow">Top exported products</span><div class="bars">${p.map(x => `<div><span>${esc(x.name)}</span><b style="width:${x.value / mx * 100}%"></b><span class="dim">${fmtUSD(x.value)}</span></div>`).join('') || '<p class="note">No product breakdown.</p>'}</div><p class="note">UN Comtrade, HS chapters.</p>`;
     GL.data.arcs = []; return;
   }
+  if (flow?.error) { box.innerHTML = head + `<p class="note">Import figures didn\u2019t load (${esc(flow.error)}). They are retried automatically in a few minutes; press refresh to try now.</p>`; GL.data.arcs = []; return; }
   const ps = flow?.partners || []; const mx = ps[0]?.value || 1;
   box.innerHTML = head + `<span class="eyebrow">${tab === 'imp' ? 'Where imports come from' : 'Where exports go'}</span><div class="bars">${ps.map(x => `<div class="click" data-iso="${esc(x.iso)}"><span>${esc(x.name)}</span><b style="width:${x.value / mx * 100}%;background:${tab === 'imp' ? 'var(--info)' : 'var(--accent)'}"></b><span class="dim">${fmtUSD(x.value)} · ${flow.total ? Math.round(x.value / flow.total * 100) : '?'}%</span></div>`).join('') || '<p class="note">No partner data.</p>'}</div>
     <p class="note">UN Comtrade (${r.year}). Flows are drawn as moving arcs on the globe when the Trade arcs layer is on. Click a partner to open it.</p>`;
