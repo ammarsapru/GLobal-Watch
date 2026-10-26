@@ -11,3 +11,5 @@ node_modules/
 *.log
 data/tle-active.txt
 data/server.log*
+data/ships-static.json
+data/tle-groups/
