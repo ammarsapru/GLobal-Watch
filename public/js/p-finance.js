@@ -97,13 +97,34 @@ function renderEcoExtra(r) {
     return `<div class="mini"><small>${esc(r.wb.labels[id])}</small><strong class="${up == null ? '' : (up === (good > 0)) ? 'up' : 'down'}">${fmtN(l[1], 1)}</strong>${spark(s.slice(-12).map(x => x[1]))}<em class="dim mono" style="font-size:10px">${l[0]}</em></div>`; }).join('') || '<p class="note">No extra indicators published.</p>';
 }
 // ---------- Outlook (IMF) ----------
+// a larger view of one IMF series: full history since 2000, forecasts dashed, hover values, table and change summary
+function openImf(id) {
+  const r = F$.econ; if (!r?.imf) return; const label = r.imf.labels[id]; const y = r.imf.thisYear;
+  const s = (r.imf.series[id] || []).map(([x, v]) => ({ x, y: v })); if (s.length < 2) return;
+  const past = s.filter(p => p.x <= y), fut = s.filter(p => p.x >= y);
+  const at = yr => s.find(p => p.x === yr)?.y; const now = at(y), ago5 = at(y - 5), ago10 = at(y - 10), last = s.at(-1);
+  const hi = s.reduce((a, b) => b.y > a.y ? b : a), lo = s.reduce((a, b) => b.y < a.y ? b : a);
+  const fmt = v => v == null ? '—' : fmtN(v, 1);
+  openModal(`${S.d.n} · ${label}`, `<div class="minis">
+      <div class="mini"><small>${y}</small><strong>${fmt(now)}</strong></div>
+      <div class="mini"><small>5 years ago</small><strong>${fmt(ago5)}</strong><em class="note">${now != null && ago5 != null ? (now - ago5 > 0 ? '+' : '') + fmtN(now - ago5, 1) + ' pts' : ''}</em></div>
+      <div class="mini"><small>10 years ago</small><strong>${fmt(ago10)}</strong></div>
+      <div class="mini"><small>IMF forecast ${last.x}</small><strong class="${now != null && last.y > now ? 'up' : 'down'}">${fmt(last.y)}</strong></div></div>
+    <div id="imfBig"></div><p class="note" id="imfHov">Hover the chart for exact values. Solid line: reported. Dashed: IMF forecast.</p>
+    <p class="note">High <b>${fmt(hi.y)}</b> in ${hi.x} · low <b>${fmt(lo.y)}</b> in ${lo.x}. Source: IMF World Economic Outlook (DataMapper).</p>
+    <details><summary>All years</summary><table class="tbl"><thead><tr><th>Year</th><th class="n">${esc(label)}</th><th></th></tr></thead><tbody>${s.slice().reverse().map(p => `<tr><td>${p.x}</td><td class="n">${fmtN(p.y, 1)}</td><td>${p.x > y ? '<span class="tag n">FORECAST</span>' : ''}</td></tr>`).join('')}</tbody></table></details>`, body => {
+    const all = s; lineChart($('#imfBig', body), [{ pts: all, color: 'transparent' }, { pts: past, color: 'var(--info)', area: true }, { pts: fut, color: 'var(--accent)', dash: true }], { h: 260, xTicks: 7, fmtY: n => fmtN(n, 1), fmtX: p => p.x, onHover: i => { const p = all[i]; $('#imfHov', body).textContent = i == null ? 'Hover the chart for exact values.' : `${p.x}${p.x > y ? ' (forecast)' : ''}: ${fmtN(p.y, 2)}`; } });
+  });
+}
+$('#p-fin').addEventListener('click', e => { const m = e.target.closest('[data-imf]'); if (m) openImf(m.dataset.imf); });
+$('#p-fin').addEventListener('keydown', e => { const m = e.target.closest('[data-imf]'); if (m && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); openImf(m.dataset.imf); } });
 function renderOutlook(r) {
   const v = $('#outView'); if (!r) return;
   if (!r.imf?.series || !Object.values(r.imf.series).some(a => a?.length)) { v.innerHTML = errBox(r.imf?.error || 'IMF forecasts unavailable for this country.'); return; }
   const y = r.imf.thisYear;
-  v.innerHTML = `<p class="note">IMF World Economic Outlook. Shaded years are forecasts.</p><div class="minis" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">${Object.entries(r.imf.labels).map(([id, label]) => { const s = r.imf.series[id] || []; const now = s.find(p => p[0] === y), nxt = s.find(p => p[0] === y + 1); return `<div class="mini"><small>${esc(label)}</small><strong>${now ? fmtN(now[1], 1) : '—'} <span class="dim" style="font-size:11px">${y}</span></strong><em class="note">${nxt ? 'Forecast ' + (y + 1) + ': ' + fmtN(nxt[1], 1) : ''}</em><div id="imf-${id}"></div></div>`; }).join('')}</div>
+  v.innerHTML = `<p class="note">IMF World Economic Outlook. Shaded years are forecasts.</p><div class="minis" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">${Object.entries(r.imf.labels).map(([id, label]) => { const s = r.imf.series[id] || []; const now = s.find(p => p[0] === y), nxt = s.find(p => p[0] === y + 1); return `<div class="mini click" data-imf="${id}" role="button" tabindex="0" title="Open a larger chart"><small>${esc(label)} <span class="expand-ic" aria-hidden="true">⤢</span></small><strong>${now ? fmtN(now[1], 1) : '—'} <span class="dim" style="font-size:11px">${y}</span></strong><em class="note">${nxt ? 'Forecast ' + (y + 1) + ': ' + fmtN(nxt[1], 1) : ''}</em><div id="imf-${id}"></div></div>`; }).join('')}</div>
     <span class="eyebrow">Country risk score</span><div id="riskBox">${skeleton(3)}</div>`;
-  for (const id of Object.keys(r.imf.labels)) { const s = (r.imf.series[id] || []).map(([x, yv]) => ({ x, y: yv })); const b = $('#imf-' + id); if (s.length > 2) lineChart(b, [{ pts: s.filter(p => p.x <= y), color: 'var(--info)', area: true }, { pts: s.filter(p => p.x >= y), color: 'var(--accent)', dash: true }], { h: 90, xTicks: 3, fmtY: n => fmtN(n, 0), fmtX: p => p.x, band: null }); }
+  for (const id of Object.keys(r.imf.labels)) { const s = (r.imf.series[id] || []).filter(p => p[0] >= y - 10).map(([x, yv]) => ({ x, y: yv })); const b = $('#imf-' + id); if (s.length > 2) lineChart(b, [{ pts: s.filter(p => p.x <= y), color: 'var(--info)', area: true }, { pts: s.filter(p => p.x >= y), color: 'var(--accent)', dash: true }], { h: 90, xTicks: 3, fmtY: n => fmtN(n, 0), fmtX: p => p.x, band: null }); }
   emit('riskRender');
 }
 

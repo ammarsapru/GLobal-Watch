@@ -155,6 +155,10 @@ const server = http.createServer(async (req, res) => {
   res.writeHead(200, { 'Content-Type': MIME[path.extname(f)] || 'application/octet-stream', 'Cache-Control': /vendor/.test(p) ? 'max-age=86400' : 'no-cache' });
   fs.createReadStream(f).pipe(res);
 });
+// keep running whatever a data source throws; log it instead of crashing
+process.on('unhandledRejection', e => log('Unhandled error (kept running):', e && e.stack || e));
+process.on('uncaughtException', e => log('Uncaught exception (kept running):', e && e.stack || e));
+server.on('error', e => { log('Server error:', e.code === 'EADDRINUSE' ? `port ${PORT} is already in use — is Global Watch already running in another window?` : e.message); if (e.code === 'EADDRINUSE') process.exit(2); });
 server.listen(PORT, HOST, () => {
   log(`Global Watch running at http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PORT}${MOCK ? '  (MOCK MODE — sample data, no API calls)' : ''}${APP_PASSWORD ? ' · password protected' : ''}`);
   if (HOST === '0.0.0.0' && !APP_PASSWORD) log('WARNING: listening publicly without APP_PASSWORD — anyone with the URL can spend your API quota.');

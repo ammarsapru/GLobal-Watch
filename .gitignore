@@ -10,3 +10,4 @@ data/advisory-levels.json
 node_modules/
 *.log
 data/tle-active.txt
+data/server.log*

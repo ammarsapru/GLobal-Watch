@@ -6,9 +6,11 @@ const features = topojson.feature(topo, topo.objects.countries).features;
 const borders = topojson.mesh(topo, topo.objects.countries, (a, b) => a !== b);
 const byNum = {}; for (const k in DATA) { const d = DATA[k]; if (d.num) byNum[+d.num] = k; }
 for (const f of features) { f.iso3 = byNum[+f.id] || null; if (!f.iso3 && f.properties?.name === 'Kosovo' && DATA.XKX) f.iso3 = 'XKX'; f.c = d3.geoCentroid(f); }
-const featByIso = {}; features.forEach(f => { if (f.iso3) featByIso[f.iso3] = f; });
+const featByIso = {}; features.forEach(f => { if (f.iso3) featByIso[f.iso3] = f; f.bb = d3.geoBounds(f); });
+// one merged land shape is about twice as fast to draw as 177 separate countries
+const landGeo = topo.objects.land ? topojson.feature(topo, topo.objects.land) : topojson.merge(topo, topo.objects.countries.geometries);
 let hi = null; // 50m detail, loaded on first zoom-in
-function loadHi() { if (hi !== null) return; hi = false; fetch('vendor/countries-50m.json').then(r => r.json()).then(t => { hi = { land: topojson.feature(t, t.objects.countries), borders: topojson.mesh(t, t.objects.countries, (a, b) => a !== b) }; }).catch(() => { hi = null; }); }
+function loadHi() { if (hi !== null) return; hi = false; fetch('vendor/countries-50m.json').then(r => r.json()).then(t => { hi = { land: t.objects.land ? topojson.feature(t, t.objects.land) : topojson.merge(t, t.objects.countries.geometries), borders: topojson.mesh(t, t.objects.countries, (a, b) => a !== b) }; }).catch(() => { hi = null; }); }
 
 const stage = $('#stage'), orb = $('#orb'), canvas = $('#globe'), ctx = canvas.getContext('2d'), sky = $('#sky'), sctx = sky.getContext('2d'), tip = $('#tip');
 const proj = d3.geoOrthographic().clipAngle(90).precision(.4);
@@ -88,16 +90,16 @@ async function setChoro(mode) {
 
 // ---------------- sky: stars, sun, moon ----------------
 const STARS = Array.from({ length: 140 }, (_, i) => [Math.abs(Math.sin(i * 12.9898) * 43758.5453) % 1, Math.abs(Math.sin(i * 78.233) * 12543.123) % 1, (i % 7 === 0 ? 1.3 : .7), .25 + (i % 5) * .08]);
-let skyDirty = true, skyLast = 0;
+let skyDirty = true, skyLast = 0, starCanvas = null;
 function viewDir(ll) { const r = d3.geoRotation(G.rot)(ll); const la = r[1] * RAD, lo = r[0] * RAD; return { x: Math.cos(la) * Math.sin(lo), y: Math.sin(la), z: Math.cos(la) * Math.cos(lo) }; }
 function drawSky(now) {
-  if (!skyDirty && now - skyLast < (G.fly || G.down || G.lifted ? 50 : 400)) return;
   skyDirty = false; skyLast = now;
   const W = sky.width, H = sky.height, dpr = W / Math.max(1, stage.clientWidth);
-  sctx.setTransform(1, 0, 0, 1, 0, 0); sctx.clearRect(0, 0, W, H);
-  sctx.fillStyle = '#d8e1e5';
-  for (const [x, y, r, a] of STARS) { sctx.globalAlpha = a; sctx.beginPath(); sctx.arc(x * W, y * H, r * dpr, 0, 7); sctx.fill(); }
-  sctx.globalAlpha = 1;
+  if (!starCanvas || starCanvas.width !== W || starCanvas.height !== H) { // stars never move: draw them once per size
+    starCanvas = document.createElement('canvas'); starCanvas.width = W; starCanvas.height = H; const s2 = starCanvas.getContext('2d'); s2.fillStyle = '#d8e1e5';
+    for (const [x, y, r, a] of STARS) { s2.globalAlpha = a; s2.beginPath(); s2.arc(x * W, y * H, r * dpr, 0, 7); s2.fill(); }
+  }
+  sctx.setTransform(1, 0, 0, 1, 0, 0); sctx.clearRect(0, 0, W, H); sctx.drawImage(starCanvas, 0, 0);
   if (!GL.layers.sunmoon) return;
   const sr = stage.getBoundingClientRect(), orr = canvas.getBoundingClientRect();
   const cx = (orr.left - sr.left + orr.width / 2) * dpr, cy = (orr.top - sr.top + orr.height / 2) * dpr, R = proj.scale() * (orr.width / G.W) * dpr;
@@ -123,7 +125,23 @@ function drawSky(now) {
 function label(x, y, t, dpr) { sctx.font = `${10 * dpr}px "JetBrains Mono", monospace`; sctx.textAlign = 'center'; sctx.fillStyle = 'rgba(127,144,154,.95)'; sctx.fillText(t, x, y); }
 
 // ---------------- main draw ----------------
-const nightC = r => d3.geoCircle().center([norm180(AST.sun[0] + 180), -AST.sun[1]]).radius(r)();
+// night side as nested circles around the anti-solar point (cached until the sun moves): dark core, soft twilight edge
+let nightCache = { key: '', rings: [] };
+function nightRings() {
+  const key = AST.sun.map(v => v.toFixed(2)).join();
+  if (nightCache.key !== key) { const c = [norm180(AST.sun[0] + 180), -AST.sun[1]]; nightCache = { key, rings: [[95, .14], [92, .18], [90, .18], [87, .16], [83, .14], [78, .12], [70, .1]].map(([rad, a]) => [d3.geoCircle().center(c).radius(rad)(), a]), line: d3.geoCircle().center(c).radius(90)() }; }
+  return nightCache;
+}
+function drawDayNight(cx, cy, r) {
+  const n = nightRings();
+  // daylight: a warm glow centred on the point where the sun is overhead (or the limb nearest to it)
+  const v = viewDir(AST.sun); const gx = cx + v.x * r * .9, gy = cy - v.y * r * .9;
+  const lit = ctx.createRadialGradient(gx, gy, 0, gx, gy, r * 1.25);
+  lit.addColorStop(0, `rgba(255,228,175,${.30 + .12 * Math.max(0, v.z)})`); lit.addColorStop(.5, 'rgba(255,216,155,.14)'); lit.addColorStop(.85, 'rgba(255,214,150,.04)'); lit.addColorStop(1, 'rgba(255,214,150,0)');
+  ctx.fillStyle = lit; ctx.beginPath(); gpath({ type: 'Sphere' }); ctx.fill();
+  for (const [g, a] of n.rings) { ctx.beginPath(); gpath(g); ctx.fillStyle = `rgba(1,4,10,${a})`; ctx.fill(); }
+  ctx.beginPath(); gpath(n.line); ctx.strokeStyle = 'rgba(255,200,120,.35)'; ctx.lineWidth = 1; ctx.stroke();
+}
 function draw(now) {
   if (!G.W) return;
   proj.rotate(G.rot).scale(G.base * G.zoom);
@@ -134,12 +152,12 @@ function draw(now) {
   ctx.beginPath(); gpath({ type: 'Sphere' }); ctx.fillStyle = C.ocean; ctx.fill();
   ctx.beginPath(); gpath(grat); ctx.strokeStyle = C.grat; ctx.lineWidth = .6; ctx.stroke();
   const useHi = G.zoom >= 2.2 && hi; if (G.zoom >= 2.2) loadHi();
-  ctx.beginPath(); if (useHi) gpath(hi.land); else features.forEach(f => gpath(f)); ctx.fillStyle = C.land; ctx.fill();
+  ctx.beginPath(); gpath(useHi ? hi.land : landGeo); ctx.fillStyle = C.land; ctx.fill();
   const ch = CHORO[GL.choro], cd = GL.choroData[GL.choro];
   if (ch && cd) for (const f of features) { const v = cd[f.iso3]; const col = v != null ? ch.color(v) : null; if (!col) continue; ctx.beginPath(); gpath(f); ctx.fillStyle = col; ctx.globalAlpha = .62; ctx.fill(); ctx.globalAlpha = 1; }
   if (G.lifted && G.hover && G.hover !== S.f) { ctx.beginPath(); gpath(G.hover); ctx.fillStyle = C.hover; ctx.fill(); }
   if (S.f) { ctx.beginPath(); gpath(S.f); ctx.fillStyle = 'rgba(230,162,60,.24)'; ctx.fill(); }
-  if (GL.layers.night) for (const [rad, a] of [[90, .26], [84, .14], [76, .12]]) { ctx.beginPath(); gpath(nightC(rad)); ctx.fillStyle = `rgba(2,5,12,${a})`; ctx.fill(); }
+  if (GL.layers.night) drawDayNight(cx, cy, r);
   ctx.beginPath(); gpath(useHi ? hi.borders : borders); ctx.strokeStyle = C.border; ctx.lineWidth = .5; ctx.stroke();
   if (S.f) { ctx.beginPath(); gpath(S.f); ctx.strokeStyle = C.accent; ctx.lineWidth = 1.3; ctx.stroke(); }
   if (GL.layers.tz && G.zoom < 3) drawTZ();
@@ -157,7 +175,8 @@ function draw(now) {
   if (S.f && !GL.data.air.length) { const p = proj(S.f.c); if (p && visible(S.f.c)) { const t = (now % 1800) / 1800; ctx.beginPath(); ctx.arc(p[0], p[1], 3 + t * 14, 0, 2 * Math.PI); ctx.strokeStyle = `rgba(230,162,60,${1 - t})`; ctx.lineWidth = 1.5; ctx.stroke(); ctx.beginPath(); ctx.arc(p[0], p[1], 3, 0, 2 * Math.PI); ctx.fillStyle = C.accent; ctx.fill(); } }
   ctx.restore();
   ctx.beginPath(); ctx.arc(cx, cy, Math.min(r, W / 2 - 1), 0, 2 * Math.PI); ctx.strokeStyle = C.line; ctx.lineWidth = 1; ctx.stroke();
-  $('#lat').textContent = (-G.rot[1]).toFixed(1); $('#lon').textContent = norm180(-G.rot[0]).toFixed(1); $('#zoomv').textContent = G.zoom.toFixed(1) + '×';
+  const hud = (-G.rot[1]).toFixed(1) + '|' + norm180(-G.rot[0]).toFixed(1) + '|' + G.zoom.toFixed(1);
+  if (hud !== G.hud) { G.hud = hud; const [a, b, c] = hud.split('|'); $('#lat').textContent = a; $('#lon').textContent = b; $('#zoomv').textContent = c + '×'; }
 }
 function mark(item, kind, painter) { const ll = [item.lon, item.lat]; if (item.lat == null || !visible(ll)) return; const p = proj(ll); if (!p) return; G.pts.push([p[0], p[1], kind, item]); painter(p[0], p[1]); }
 function drawTZ() {
@@ -230,7 +249,7 @@ function drawSats() {
 
 // ---------------- interaction ----------------
 const local = e => { const b = canvas.getBoundingClientRect(); return [(e.clientX - b.left) * G.W / b.width, (e.clientY - b.top) * G.W / b.height]; };
-function pickCountry(x, y) { const ll = proj.invert([x, y]); if (!ll || !visible(ll)) return null; for (const f of features) if (d3.geoContains(f, ll)) return f; return null; }
+function pickCountry(x, y) { const ll = proj.invert([x, y]); if (!ll || !visible(ll)) return null; for (const f of features) { if (!inBox([f.bb[0][0], f.bb[0][1], f.bb[1][0], f.bb[1][1]], ll[0], ll[1])) continue; if (d3.geoContains(f, ll)) return f; } return null; }
 function pickPt(x, y) { let best = null, bd = 9 * 9; for (const pt of G.pts) { const d = (pt[0] - x) ** 2 + (pt[1] - y) ** 2; if (d < bd) { bd = d; best = pt; } } return best; }
 function lift() { clearTimeout(G.sinkT); if (G.lifted) return; G.lifted = true; stage.classList.add('lifted'); G.last = performance.now(); skyDirty = true; }
 function sink(delay = 600) { clearTimeout(G.sinkT); G.sinkT = setTimeout(() => { if (G.down) return; G.lifted = false; stage.classList.remove('lifted'); G.hover = null; G.hoverPt = null; tip.hidden = true; skyDirty = true; }, delay); }
@@ -297,11 +316,12 @@ let lastDraw = 0;
 function frame(now) {
   requestAnimationFrame(frame);
   if (document.hidden) return;
-  const busy = G.fly || G.down || G.lifted;
-  if (!busy && now - lastDraw < 33) return;
+  const busy = G.fly || G.down || (G.lifted && now - G.last < 5000);
+  if (now - lastDraw < (busy ? 15 : 41)) return; // ~60 fps while you interact, ~24 fps while it drifts
   lastDraw = now;
   if (G.fly) { const t = Math.min(1, (now - G.fly.t0) / G.fly.dur), k = d3.easeCubicInOut(t); G.rot = G.fly.i(k); G.zoom = G.fly.z(k); if (t >= 1) { G.fly = null; G.last = now; } skyDirty = true; }
-  else if (G.auto && !G.down && (!G.lifted || now - G.last > 5000) && G.zoom < 1.5) { G.rot[0] += G.lifted ? .04 : .08; }
+  else if (G.auto && !G.down && (!G.lifted || now - G.last > 5000) && G.zoom < 1.5) { G.rot[0] += (G.lifted ? 1.2 : 2.4) * Math.min(.1, (now - (G.prevT || now)) / 1000); } // degrees per second, smooth at any frame rate
+  G.prevT = now;
   draw(now); drawSky(now);
 }
 function startGlobe() { resize(); updateSunInfo(); if (GL.choro !== 'off') setChoro(GL.choro); requestAnimationFrame(frame); }

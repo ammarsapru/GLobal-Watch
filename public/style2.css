@@ -205,3 +205,8 @@ details summary{cursor:pointer;font-size:13px}
   .country .eyebrow{display:none}
 }
 @media (max-width:1250px){ .status .pill:not(.bad):not(.acc){display:none} .clock{display:none} }
+.mini.click{cursor:pointer;transition:border-color .15s}
+.mini.click:hover,.mini.click:focus-visible{border-color:var(--accent)}
+.mini .expand-ic{float:right;color:var(--dim);font-size:12px}
+.mini.click:hover .expand-ic{color:var(--accent)}
+#imfBig{min-height:260px}

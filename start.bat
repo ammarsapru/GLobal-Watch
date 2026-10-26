@@ -16,5 +16,12 @@ if not exist .env (
 )
 echo Starting Global Watch at http://localhost:8787  (close this window to stop it)
 start "" http://localhost:8787
+:run
 node server.js
+if %errorlevel%==2 goto stop
+echo.
+echo Global Watch stopped unexpectedly (see data\server.log). Restarting in 5 seconds... close this window to stop.
+timeout /t 5 /nobreak >nul
+goto run
+:stop
 pause
