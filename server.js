@@ -87,7 +87,7 @@ const routes = {
     if (typeof b.briefTime === 'string' && /^\d{2}:\d{2}$/.test(b.briefTime)) s.briefTime = b.briefTime;
     collector.saveSettings(); return s;
   },
-  async 'POST /api/ask'(q, b) { return ask({ question: String(b.question || '').slice(0, 600), iso: b.iso && country(b.iso) ? b.iso : null, client: b.client || {}, panels: b.panels }); },
+  async 'POST /api/ask'(q, b) { return ask({ question: String(b.question || '').slice(0, 600), iso: b.iso && country(b.iso) ? b.iso : null, client: b.client || {}, panels: b.panels, history: Array.isArray(b.history) ? b.history.slice(-3) : [] }); },
   async 'POST /api/ai'(q, b) {
     const f = AI.PROMPTS[b.task]; if (!f) throw new Error('Unknown AI task');
     const [sys, user] = f(b);

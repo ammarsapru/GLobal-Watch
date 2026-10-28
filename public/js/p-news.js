@@ -2,7 +2,7 @@
 /* News panel: GDELT (free) or Google News. Unseen-first ranking, story clustering, threads over days, domestic/foreign,
    state-media flags, tone & volume trend, entity chips, translation, AI digest, places-in-the-news layer. */
 const news = makePanel('news', 'Local News', null, { short: 'News' });
-const N = { topic: 'top', lang: store.get('nlang', 'en'), src: store.get('nsrc', 'gdelt'), clusters: [], data: null, auto: store.get('nauto', 0), timer: null, who: 'all', hideState: store.get('nhidestate', false), entity: null, translated: {} };
+const N = { q: '', qFor: null, topic: 'top', lang: store.get('nlang', 'en'), src: store.get('nsrc', 'gdelt'), clusters: [], data: null, auto: store.get('nauto', 0), timer: null, who: 'all', hideState: store.get('nhidestate', false), entity: null, translated: {} };
 let seen = store.get('seen', {});
 (function prune() { const cut = Date.now() - 21 * 864e5; for (const k in seen) if (seen[k] < cut) delete seen[k]; store.set('seen', seen); })();
 const STOP = new Set('a an the of to in on for and or but with at by from as is are was were be been it its this that after over into new says say said amid about than more up out vs not will can has have had his her their our your who what when how why after before could would should may might just also than then there here first last week year years day days'.split(' '));
@@ -59,6 +59,7 @@ function newsSkeleton() {
     <div class="bar"><label class="check" title="Google News uses SerpAPI searches">Source<select id="nSrc" class="inp" style="width:auto;padding:2px 4px"><option value="gdelt">GDELT (free)</option><option value="google">Google News</option></select></label>
       <label class="check" title="GDELT is free; Google News uses one SerpAPI search per refresh">Auto<select id="nAuto" class="inp" style="width:auto;padding:2px 4px">${[[0, 'off'], [15, '15 min'], [30, '30 min'], [60, '1 h']].map(([v, l]) => `<option value="${v}" ${v == N.auto ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
       <span class="grow"></span><button class="linkbtn" id="nFormulaBtn" type="button">How ranking works</button></div>
+    <div class="bar nq" id="nQBar" hidden><span class="eyebrow">Searching</span><b id="nQText"></b><button class="linkbtn" id="nQClear" type="button">clear ✕</button></div>
     <pre class="formula" id="nFormula" hidden>${esc(FORMULA)}</pre>
     <div class="minis" id="nTone"></div>
     <div class="entities" id="nEnt"></div>
@@ -75,6 +76,7 @@ function newsSkeleton() {
   $('#nFormulaBtn').onclick = () => { $('#nFormula').hidden = !$('#nFormula').hidden; };
   $('#nSeen').onclick = () => { markSeen(N.clusters.flatMap(g => g.items)); renderNews(); toast('All headlines marked as seen.'); };
   $('#nDigest').onclick = digest; $('#nTr').onclick = translate;
+  $('#nQClear').onclick = () => { setNewsQuery(''); loadNews(); };
   $('#nEnt').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; N.entity = N.entity === b.dataset.e ? null : b.dataset.e; renderNews(); });
 }
 function armNewsTimer() { clearInterval(N.timer); if (N.auto) N.timer = setInterval(() => loadNews(true, true), N.auto * 60e3); }
@@ -85,10 +87,11 @@ function markSeen(items) { const t = Date.now(); for (const i of items) if (!see
 async function loadNews(force, quiet) {
   if (!$('#nList')) newsSkeleton();
   const box = $('#nList'); const iso = S.iso;
-  const label = iso ? (S.d.n + (N.topic !== 'top' ? ' · ' + N.topic : '')) : 'world headlines';
+  const label = iso ? (S.d.n + (N.q && N.qFor === iso ? ' · “' + N.q + '”' : N.topic !== 'top' ? ' · ' + N.topic : '')) : 'world headlines';
   if (box.querySelector('.story')) { box.classList.add('busy'); if (!quiet) $('#nStat').textContent = 'Loading ' + label + '…'; } else box.innerHTML = skeleton(6);
-  const qs = new URLSearchParams({ topic: N.topic, lang: N.lang, ...(iso ? { iso } : {}), ...(force ? { force: 1 } : {}) });
-  if (N.src === 'google' && iso) { qs.set('src', 'google'); qs.set('gl', S.d.a2); qs.set('hl', N.lang === 'local' ? (S.d.lang || 'EN').split(',')[0].trim().toLowerCase() : 'en'); if (!(N.lang === 'local' && N.topic === 'top')) qs.set('q', S.d.n + (N.topic === 'top' ? '' : ' ' + N.topic)); }
+  const nq = N.q && N.qFor === iso ? N.q : ''; showNewsQuery();
+  const qs = new URLSearchParams({ topic: N.topic, lang: N.lang, ...(iso ? { iso } : {}), ...(nq ? { q: nq } : {}), ...(force ? { force: 1 } : {}) });
+  if (N.src === 'google' && iso) { qs.set('src', 'google'); qs.set('gl', S.d.a2); qs.set('hl', N.lang === 'local' ? (S.d.lang || 'EN').split(',')[0].trim().toLowerCase() : 'en'); if (nq || !(N.lang === 'local' && N.topic === 'top')) qs.set('q', S.d.n + (nq ? ' ' + nq : N.topic === 'top' ? '' : ' ' + N.topic)); }
   try {
     const r = await api('/api/news?' + qs); if (iso !== S.iso) return;
     const before = new Set(N.clusters.map(g => g.lead.fp));
@@ -150,3 +153,7 @@ async function translate() {
   catch (e) { toast(e.code === 'no_ai' ? 'Translation needs the AI to be connected.' : e.message, 5000); }
   btn.disabled = false; btn.textContent = 'Translate';
 }
+
+// a search term set by the voice assistant (or later by the user) applies to one country only
+function setNewsQuery(q, iso) { N.q = String(q || '').trim(); N.qFor = N.q ? (iso || S.iso) : null; showNewsQuery(); }
+function showNewsQuery() { const b = $('#nQBar'); if (!b) return; const on = N.q && N.qFor === S.iso; b.hidden = !on; if (on) $('#nQText').textContent = '“' + N.q + '”'; }

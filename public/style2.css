@@ -210,3 +210,17 @@ details summary{cursor:pointer;font-size:13px}
 .mini .expand-ic{float:right;color:var(--dim);font-size:12px}
 .mini.click:hover .expand-ic{color:var(--accent)}
 #imfBig{min-height:260px}
+/* sectioned voice answers */
+.vanswer{max-height:52vh;overflow:auto}
+.vanswer section{display:flex;flex-direction:column;gap:3px}
+.vanswer .vopen{font-size:16.5px;color:var(--fg)}
+.vanswer .persp{margin:0;padding-left:18px;display:flex;flex-direction:column;gap:4px;font-size:14.5px;line-height:1.5}
+.vanswer .persp b{color:var(--accent);font-weight:600;margin-right:4px}
+.vanswer .assess{border-left:2px solid var(--violet);padding-left:10px}
+.vanswer .assess .eyebrow{color:var(--violet)}
+.vanswer .miss .eyebrow{color:var(--warn)}
+.vanswer details.srcs summary{cursor:pointer;margin-bottom:4px}
+.vanswer details.srcs a{display:block;padding:2px 0}
+#vStop.solid{background:var(--accent);color:var(--on-accent);border-color:var(--accent)}
+.nq{background:var(--accent-soft);border:1px solid rgba(230,162,60,.35);border-radius:4px;padding:4px 8px}
+.nq b{color:var(--fg)}

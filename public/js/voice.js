@@ -11,6 +11,7 @@ function setVState(s, label) {
   V.state = s; $('#voice').dataset.state = s;
   $('#vState').textContent = label || { listening: 'Listening…', thinking: 'Thinking…', speaking: 'Speaking', idle: 'Ask anything', error: 'Something went wrong' }[s];
   $('#micBtn').classList.toggle('on', s === 'listening');
+  $('#vStop').textContent = s === 'listening' ? 'Send (P)' : 'Stop speaking'; $('#vStop').classList.toggle('solid', s === 'listening');
 }
 function openVoice() {
   const v = $('#voice'); if (v.hidden) { v.hidden = false; anim(v, [{ opacity: 0 }, { opacity: 1 }], { duration: 180 }); }
@@ -60,43 +61,68 @@ function clientContext() {
   return c;
 }
 async function askQuestion(q) {
-  openVoice(); setVState('thinking'); $('#vQ').textContent = q; $('#vAnswer').hidden = true;
+  openVoice(); setVState('thinking', 'Looking into it…'); $('#vQ').textContent = q; $('#vAnswer').hidden = true;
   try {
-    const r = await post('/api/ask', { question: q, iso: S.iso, client: clientContext() });
-    V.last = r; showAnswer(r); speak(r.answer);
-    // bring the relevant country and feeds into view
-    if (r.countries?.length === 1 && r.countries[0] !== S.iso) emit('country', r.countries[0]);
-    const want = [...new Set((r.panels || []).map(p => PANEL_OF[p]).filter(Boolean))].slice(0, 3);
-    want.forEach((id, i) => setTimeout(() => { if (!isOpen(id)) restore(id); else focusPanel(id); }, 250 + i * 260));
+    const history = store.get('askHistory', []).slice(0, 2).reverse().map(h => ({ q: h.q, a: h.a }));
+    const r = await post('/api/ask', { question: q, iso: S.iso, client: clientContext(), history });
+    V.last = r;
+    if (r.plan) await arrangeBoard(r.plan);
+    showAnswer(r);
+    speakSegments(r.speech?.length ? r.speech : [{ text: r.answer, panel: null }]);
     store.set('askHistory', [{ q, a: r.answer, t: Date.now() }, ...store.get('askHistory', [])].slice(0, 30));
   } catch (e) {
     setVState('error', e.code === 'no_ai' ? 'The AI isn’t connected, so I can’t answer yet.' : 'Couldn’t answer: ' + e.message);
     $('#vAnswer').hidden = false; $('#vAnswer').innerHTML = e.code === 'no_ai' ? `${esc(e.message)}<p class="note">Start Ollama (or set AI_BASE_URL in .env) and press Reconnect AI in Settings.</p>` : errBox(e);
   }
 }
+// put the country on the globe and lay the board out around what was asked
+async function arrangeBoard(plan) {
+  if (plan.newsQuery) setNewsQuery(plan.newsQuery, plan.iso);
+  if (plan.iso && plan.iso !== S.iso) emit('country', plan.iso); else if (plan.newsQuery && isOpen('news')) loadNews();
+  layout = { key: 'custom', left: plan.layout.left, center: plan.layout.center, right: plan.layout.right };
+  saveLayout(); applyLayout();
+  for (const id of placed()) panels[id]?.onShow && panels[id].onShow();
+  for (const [id, tab] of Object.entries(plan.tabs || {})) { const b = $(`#p-${id} [data-seg="tab-${id}"] [data-v="${tab}"]`); if (b && panels[id]?.tab !== tab) b.click(); }
+  if (S.f) { flyTo(S.f.c, 1.2); lift(); sink(9000); }
+  await new Promise(r => setTimeout(r, 350));
+}
 function showAnswer(r) {
   const box = $('#vAnswer'); box.hidden = false;
   const byN = Object.fromEntries(r.sources.map(s => [s.n, s]));
-  const html = esc(r.answer).replace(/\[(\d+)\]/g, (m, n) => byN[n] ? `<a class="cite" href="${esc(byN[n].url || '#')}" target="_blank" rel="noopener" title="${esc(byN[n].title)}">${n}</a>` : '');
+  const cite = t => esc(t || '').replace(/\[(\d+(?:,\s*\d+)*)\]/g, (m, ns) => ns.split(/,\s*/).map(n => byN[n] ? `<a class="cite" href="${esc(byN[n].url || '#')}" target="_blank" rel="noopener" title="${esc(byN[n].title)}">${n}</a>` : '').join(''));
+  const P = r.parts || { answer: r.answer };
   const used = r.sources.filter(s => s.used);
-  box.innerHTML = `<p>${html}</p>${used.length ? `<div class="srcs"><span class="eyebrow">Sources</span>${used.map(s => `<a href="${esc(s.url || '#')}" target="_blank" rel="noopener"><b>${s.n}</b> ${esc(s.title)}</a>`).join('')}</div>` : ''}
-    <p class="note">Looked at: ${esc((r.panels || []).join(', ') || 'general')}${r.countries?.length ? ' · ' + esc(r.countries.map(i => DATA[i]?.n || i).join(', ')) : ' · world'}</p>`;
+  const where = r.countries?.length ? r.countries.map(i => DATA[i]?.n || i).join(', ') : 'the world';
+  box.innerHTML = `${P.opening ? `<p class="vopen">${cite(P.opening)}</p>` : ''}
+    <section><span class="eyebrow">What you asked${r.topic ? ` · “${esc(r.topic)}” in ${esc(where)}` : ''}</span><p>${cite(P.answer)}</p></section>
+    ${P.perspectives?.length ? `<section><span class="eyebrow">What outlets are saying</span><ul class="persp">${P.perspectives.map(x => `<li><b>${esc(x.source)}</b> ${cite(x.says)}</li>`).join('')}</ul></section>` : ''}
+    ${P.assessment ? `<section class="assess"><span class="eyebrow">My read · analysis, not fact</span><p>${cite(P.assessment)}</p></section>` : ''}
+    ${P.also ? `<section><span class="eyebrow">Also on your board</span><p>${cite(P.also)}</p></section>` : ''}
+    ${P.missing || r.unavailable?.length ? `<section class="miss"><span class="eyebrow">Not available</span><p>${cite(P.missing || '')}${r.unavailable?.length ? `<span class="note"> Couldn’t load: ${esc(r.unavailable.map(x => String(x).replace(/\s*\(.*\)$/, '')).join(', '))}.</span>` : ''}</p></section>` : ''}
+    ${used.length ? `<details class="srcs"><summary class="eyebrow">Sources (${used.length})</summary>${used.map(s => `<a href="${esc(s.url || '#')}" target="_blank" rel="noopener"><b>${s.n}</b> ${esc(s.title)}</a>`).join('')}</details>` : ''}
+    <p class="note">Looked at: ${esc((r.panels || []).join(', ') || 'general')} · ${esc(where)}. The board has been arranged around this question.</p>`;
 }
 function pickVoice() {
   const vs = speechSynthesis.getVoices(); const lang = (store.get('vlang', navigator.language || 'en-US')).slice(0, 2);
   const want = store.get('voiceName', '');
   return vs.find(v => v.name === want) || vs.find(v => v.lang.startsWith(lang) && /natural|neural|online/i.test(v.name)) || vs.find(v => v.lang.startsWith(lang) && /google/i.test(v.name)) || vs.find(v => v.lang.startsWith(lang)) || vs[0];
 }
-function speak(text) {
+function speak(text) { speakSegments([{ text, panel: null }]); }
+// speak section by section and highlight the panel each section is about
+function speakSegments(segs) {
   if (!('speechSynthesis' in window) || store.get('voiceMute', false)) { setVState('idle', 'Answer'); return; }
   speechSynthesis.cancel();
-  const clean = String(text).replace(/\[\d+\]/g, '').replace(/\s+([.,;:])/g, '$1').replace(/\s{2,}/g, ' ').trim();
-  // split into sentences: Chrome cuts long utterances off after ~15 s
-  const chunks = clean.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [clean];
-  const voice = pickVoice(); let left = chunks.length;
-  setVState('speaking');
-  for (const c of chunks) {
-    const u = new SpeechSynthesisUtterance(c.trim()); if (voice) u.voice = voice; u.rate = +store.get('voiceRate', 1.02); u.pitch = 1;
+  const voice = pickVoice(); const items = [];
+  for (const sg of segs) {
+    const clean = String(sg.text || '').replace(/\[\d+(?:,\s*\d+)*\]/g, '').replace(/\s+([.,;:])/g, '$1').replace(/\s{2,}/g, ' ').trim(); if (!clean) continue;
+    const chunks = clean.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [clean]; // Chrome cuts long utterances off after ~15 s
+    chunks.forEach((c, k) => items.push({ text: c.trim(), panel: k === 0 ? sg.panel : null }));
+  }
+  if (!items.length) { setVState('idle', 'Answer'); return; }
+  let left = items.length; setVState('speaking');
+  for (const it of items) {
+    const u = new SpeechSynthesisUtterance(it.text); if (voice) u.voice = voice; u.rate = +store.get('voiceRate', 1.02); u.pitch = 1;
+    u.onstart = () => { if (it.panel && isOpen(it.panel)) focusPanel(it.panel); };
     u.onboundary = () => { V.speakLvl = 1; };
     u.onend = u.onerror = () => { if (--left <= 0 && V.state === 'speaking') setVState('idle', 'Press P to ask a follow-up'); };
     speechSynthesis.speak(u);
@@ -158,6 +184,6 @@ document.addEventListener('keydown', e => {
 document.addEventListener('keyup', e => { if ((e.key === 'p' || e.key === 'P') && V.held && V.state === 'listening') { V.held = false; sendSpoken(); } clearTimeout(V.holdT); });
 $('#micBtn').onclick = () => V.state === 'listening' ? sendSpoken() : startListening();
 $('#vClose').onclick = closeVoice;
-$('#vStop').onclick = () => { speechSynthesis.cancel(); if (V.state === 'listening') stopListening(true); setVState('idle', 'Stopped'); };
+$('#vStop').onclick = () => { if (V.state === 'listening') { sendSpoken(); return; } speechSynthesis.cancel(); setVState('idle', 'Stopped. Press P to ask again'); };
 $('#vForm').onsubmit = e => { e.preventDefault(); const q = $('#vInput').value.trim(); if (!q) return; stopListening(true); $('#vInput').value = ''; askQuestion(q); };
 $('#voice').addEventListener('click', e => { if (e.target.id === 'voice') closeVoice(); });
