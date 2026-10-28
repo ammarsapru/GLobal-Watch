@@ -5,7 +5,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { ROOT, log, MOCK, country } = require('./lib/util');
+const { ROOT, STATE_DIR, log, MOCK, country } = require('./lib/util');
 const store = require('./lib/store');
 const serp = require('./lib/sources/serp');
 const track = require('./lib/sources/tracking');
@@ -115,7 +115,7 @@ const routes = {
     await t('space', () => space.forCountry(c.a2).then(r => r.owned.length + ' owned of ' + r.total));
     await t('aircraft', () => track.aircraftFor(c.a2, {}).then(r => r.list.length + ' aircraft; ' + (r.errors || []).join(' ')));
     await t('ai', () => AI.probe(true).then(r => r.base ? r.provider + ' ' + r.model : 'offline: ' + r.error));
-    return { iso, results: out, samples: fs.existsSync(path.join(ROOT, 'data', 'samples')) ? fs.readdirSync(path.join(ROOT, 'data', 'samples')) : [] };
+    return { iso, results: out, samples: fs.existsSync(path.join(STATE_DIR, 'samples')) ? fs.readdirSync(path.join(STATE_DIR, 'samples')) : [] };
   }
 };
 
